@@ -1,0 +1,90 @@
+ --2--MIN/MAX--
+ SELECT MIN(subscription_start),
+     MAX(subscription_end)
+FROM subscriptions;
+--3--months--
+WITH 
+  months AS (
+      SELECT 
+      '2016-12-01' AS start_date,
+      '2016-12-31' AS end_date
+      UNION
+      SELECT 
+      '2017-01-01' AS start_date,
+      '2017-01-31' AS end_date
+      UNION
+      SELECT 
+      '2017-02-01' AS start_date,
+      '2017-02-28' AS end_date
+      UNION
+      SELECT 
+      '2017-03-01' AS start_date,
+      '2017-03-31' AS end_date
+        ),
+--4--cross_join--
+  cross_join As (
+    SELECT *
+    FROM months
+    CROSS JOIN subscriptions
+     ),
+--5--status--
+  status AS (
+    SELECT id, segment, start_date AS month,
+      CASE 
+          WHEN segment = '87' 
+          AND subscription_start < start_date
+          AND  (
+          subscription_end > start_date
+          OR subscription_end IS NULL)
+          THEN 1
+          ELSE 0
+          END AS is_active_87,
+      CASE 
+            WHEN segment = '30' 
+          AND subscription_start < start_date
+          AND  (
+          subscription_end > start_date
+          OR subscription_end IS NULL)
+          THEN 1
+          ELSE 0
+          END AS is_active_30,
+    --is_canceled--
+     CASE 
+          WHEN segment = '87' 
+          AND subscription_start < start_date
+          AND  (
+          subscription_end BETWEEN start_date
+          AND end_date)
+          THEN 1
+          ELSE 0
+          END AS is_canceled_87,
+      CASE 
+            WHEN segment = '30' 
+          AND subscription_start < start_date
+          AND  (
+          subscription_end BETWEEN start_date
+          AND end_date)
+          THEN 1
+          ELSE 0
+          END AS is_canceled_30
+    FROM cross_join
+    ),
+--status_aggregate--
+  status_aggregate AS (
+  SELECT month,
+    SUM(is_active_87) AS sum_active_87,
+    SUM(is_active_30) AS sum_active_30,
+    SUM(is_canceled_87) AS sum_canceled_87,
+    SUM(is_canceled_30) AS sum_canceled_30
+  FROM status
+  GROUP BY 1
+  ORDER BY 1
+  )
+--churn_calculation_by_month--
+SELECT month As 'Month',
+      ROUND(1.0 * sum_canceled_87 / sum_active_87, 2) 
+      AS '87 Segment Churn',
+      ROUND(1.0 * sum_canceled_30 / sum_active_30, 2)
+      AS '30 Segment Churn'
+FROM status_aggregate;
+     
